@@ -1,88 +1,142 @@
 import fs from 'node:fs/promises'
-import { join } from 'node:path'
+import os from 'node:os'
+import path from 'node:path'
 import process from 'node:process'
-
-import { fileURLToPath } from 'node:url'
 import { execa } from 'execa'
+import { afterAll, beforeEach, describe, expect, it } from 'vitest'
+import { hasUncommittedChanges } from '../src/cli/utils.js'
 
-import { afterAll, beforeEach, expect, it } from 'vitest'
+const cliPath = path.resolve('bin/index.mjs')
+const fixturePath = path.resolve('.temp/cli-test')
 
-const CLI_PATH = fileURLToPath(new URL('../bin/index.mjs', import.meta.url))
-const genPath = fileURLToPath(new URL(`../.temp/${randomStr()}`, import.meta.url))
-
-function randomStr() {
-  return Math.random().toString(36).slice(2)
+interface FixturePackageJson {
+  devDependencies?: Record<string, string>
+  scripts?: Record<string, string>
 }
 
-async function run(params: string[] = [], env = {
-  SKIP_PROMPT: '1',
-  NO_COLOR: '1',
-}) {
-  return execa('node', [CLI_PATH, ...params], {
-    cwd: genPath,
+async function writeFixture(pkg: Record<string, unknown> = {}): Promise<void> {
+  await fs.rm(fixturePath, { force: true, recursive: true })
+  await fs.mkdir(path.join(fixturePath, '.vscode'), { recursive: true })
+  await Promise.all([
+    fs.writeFile(path.join(fixturePath, 'package.json'), `${JSON.stringify(pkg, null, 2)}\n`),
+    fs.writeFile(path.join(fixturePath, '.eslintignore'), 'lint-output\n'),
+    fs.writeFile(path.join(fixturePath, '.prettierignore'), 'format-output\n'),
+    fs.writeFile(path.join(fixturePath, '.eslintrc.yml'), ''),
+    fs.writeFile(path.join(fixturePath, '.prettierrc'), '{}\n'),
+    fs.writeFile(
+      path.join(fixturePath, '.vscode/settings.json'),
+      '{\n  // Keep this comment\n  "editor.codeActionsOnSave": {\n    "source.fixAll.eslint": "explicit",\n    "custom.action": true\n  }\n}\n',
+    ),
+  ])
+}
+
+async function runCli(args: string[] = []) {
+  return execa('node', [cliPath, ...args], {
+    cwd: fixturePath,
     env: {
       ...process.env,
-      ...env,
+      NO_COLOR: '1',
     },
+    reject: false,
   })
-};
+}
 
-async function createMockDir() {
-  await fs.rm(genPath, { recursive: true, force: true })
-  await fs.mkdir(genPath, { recursive: true })
-
-  await Promise.all([
-    fs.writeFile(join(genPath, 'package.json'), JSON.stringify({}, null, 2)),
-    fs.writeFile(join(genPath, '.eslintrc.yml'), ''),
-    fs.writeFile(join(genPath, '.eslintignore'), 'some-path\nsome-file'),
-    fs.writeFile(join(genPath, '.prettierc'), ''),
-    fs.writeFile(join(genPath, '.prettierignore'), 'some-path\nsome-file'),
-  ])
-};
-
-beforeEach(async () => await createMockDir())
-afterAll(async () => await fs.rm(genPath, { recursive: true, force: true }))
-
-it('package.json updated', async () => {
-  const { stdout } = await run()
-
-  const pkgContent: Record<string, any> = JSON.parse(await fs.readFile(join(genPath, 'package.json'), 'utf-8'))
-
-  expect(JSON.stringify(pkgContent.devDependencies)).toContain('@antfu/eslint-config')
-  expect(stdout).toContain('Changes wrote to package.json')
+beforeEach(async () => {
+  await writeFixture()
+})
+afterAll(async () => {
+  await fs.rm(fixturePath, { force: true, recursive: true })
 })
 
-it('esm eslint.config.js', async () => {
-  const pkgContent = await fs.readFile('package.json', 'utf-8')
-  await fs.writeFile(join(genPath, 'package.json'), JSON.stringify({ ...JSON.parse(pkgContent), type: 'module' }, null, 2))
+describe('cli migration', () => {
+  it('does not treat a non-Git directory as a dirty worktree', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'oxc-config-cli-'))
 
-  const { stdout } = await run()
+    try {
+      expect(hasUncommittedChanges(directory)).toBe(false)
+    } finally {
+      await fs.rm(directory, { force: true, recursive: true })
+    }
+  })
 
-  const eslintConfigContent = await fs.readFile(join(genPath, 'eslint.config.js'), 'utf-8')
-  expect(eslintConfigContent.includes('export default')).toBeTruthy()
-  expect(stdout).toContain('Created eslint.config.js')
-})
+  it('creates both configs and updates package.json', async () => {
+    const result = await runCli([
+      '--yes',
+      '--framework',
+      'react',
+      '--framework',
+      'svelte',
+      '--typescript',
+      '--no-install',
+    ])
+    const pkg = JSON.parse(await fs.readFile(path.join(fixturePath, 'package.json'), 'utf8')) as FixturePackageJson
+    const lintConfig = await fs.readFile(path.join(fixturePath, 'oxlint.config.ts'), 'utf8')
+    const formatConfig = await fs.readFile(path.join(fixturePath, 'oxfmt.config.ts'), 'utf8')
 
-it('ignores files added in eslint.config.js', async () => {
-  const { stdout } = await run()
+    expect(result.exitCode).toBe(0)
+    expect(lintConfig).toContain("import oxlint from '@mzwing/oxc-config'")
+    expect(lintConfig).toContain('react: true')
+    expect(lintConfig).toContain('svelte: true')
+    expect(lintConfig).toContain('typescript: true')
+    expect(lintConfig).toContain('lint-output')
+    expect(formatConfig).toContain('format-output')
+    expect(formatConfig).toContain('svelte: true')
+    expect(pkg.devDependencies?.['@eslint-react/eslint-plugin']).toBe('^5.9.2')
+    expect(pkg.devDependencies?.['@mzwing/oxc-config']).toBe('^0.1.0')
+    expect(pkg.devDependencies?.oxfmt).toBe('^0.59.0')
+    expect(pkg.devDependencies?.oxlint).toBe('^1.74.0')
+    expect(pkg.devDependencies?.['oxlint-tsgolint']).toBe('^0.25.0')
+    expect(pkg.devDependencies?.svelte).toBe('^5.0.0')
+    expect(pkg.scripts).toMatchObject({
+      format: 'oxfmt --write .',
+      'format:check': 'oxfmt --check .',
+      lint: 'oxlint',
+      'lint:fix': 'oxlint --fix',
+    })
+  })
 
-  const eslintConfigContent = (await fs.readFile(join(genPath, 'eslint.config.mjs'), 'utf-8')).replace(/\\/g, '/')
+  it('detects frameworks and preserves JSONC settings', async () => {
+    await writeFixture({
+      dependencies: { next: '^16.0.0', react: '^19.0.0' },
+      devDependencies: { typescript: '^6.0.0' },
+    })
+    const result = await runCli(['--yes', '--no-install'])
+    const lintConfig = await fs.readFile(path.join(fixturePath, 'oxlint.config.ts'), 'utf8')
+    const pkg = JSON.parse(await fs.readFile(path.join(fixturePath, 'package.json'), 'utf8')) as FixturePackageJson
+    const settings = await fs.readFile(path.join(fixturePath, '.vscode/settings.json'), 'utf8')
 
-  expect(stdout).toContain('Created eslint.config.mjs')
-  expect(eslintConfigContent)
-    .toMatchInlineSnapshot(`
-      "import antfu from '@antfu/eslint-config'
+    expect(result.exitCode).toBe(0)
+    expect(lintConfig).toContain('nextjs: true')
+    expect(lintConfig).toContain('react: true')
+    expect(lintConfig).toContain('typescript: true')
+    expect(pkg.devDependencies?.['oxlint-tsgolint']).toBe('^0.25.0')
+    expect(settings).toContain('// Keep this comment')
+    expect(settings).toContain('"custom.action": true')
+    expect(settings).toContain('"source.fixAll.oxc": "explicit"')
+    expect(settings).not.toContain('source.fixAll.eslint')
+  })
 
-      export default antfu({
-        ignores: ["some-path","**/some-path/**","some-file","**/some-file/**"],
-      })
-      "
-    `)
-})
+  it('reports legacy files without deleting them', async () => {
+    await Promise.all([
+      fs.rm(path.join(fixturePath, '.eslintignore')),
+      fs.rm(path.join(fixturePath, '.prettierignore')),
+    ])
+    const result = await runCli(['--yes', '--no-install'])
+    const lintConfig = await fs.readFile(path.join(fixturePath, 'oxlint.config.ts'), 'utf8')
+    const formatConfig = await fs.readFile(path.join(fixturePath, 'oxfmt.config.ts'), 'utf8')
 
-it('suggest remove unnecessary files', async () => {
-  const { stdout } = await run()
+    expect(result.stdout).toContain('Review and remove legacy config files after verification')
+    expect(lintConfig).toContain('export default oxlint()')
+    expect(formatConfig).toContain('export default oxfmt()')
+    await expect(fs.stat(path.join(fixturePath, '.eslintrc.yml'))).resolves.toBeDefined()
+    await expect(fs.stat(path.join(fixturePath, '.prettierrc'))).resolves.toBeDefined()
+  })
 
-  expect(stdout).toContain('You can now remove those files manually')
-  expect(stdout).toContain('.eslintignore, .eslintrc.yml, .prettierc, .prettierignore')
+  it('refuses to overwrite an existing Oxc config', async () => {
+    await fs.writeFile(path.join(fixturePath, 'oxlint.config.ts'), 'export default {}\n')
+    const result = await runCli(['--yes', '--no-install'])
+
+    expect(result.exitCode).toBe(1)
+    expect(`${result.stdout}\n${result.stderr}`).toContain('Refusing to overwrite existing config')
+  })
 })

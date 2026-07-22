@@ -1,179 +1,231 @@
-import type { OptionsConfig, TypedFlatConfigItem } from '../src/types'
-
 import fs from 'node:fs/promises'
-import { join, resolve } from 'node:path'
+import path from 'node:path'
 import { execa } from 'execa'
-import { glob } from 'tinyglobby'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { afterAll, beforeAll, it } from 'vitest'
+interface OxlintDiagnostic {
+  code: string
+  severity: string
+}
 
-const isWindows = process.platform === 'win32'
-const timeout = isWindows ? 300_000 : 60_000
+interface OxlintReport {
+  diagnostics: OxlintDiagnostic[]
+}
+
+const fixtureRoot = path.resolve('fixtures')
+const formatInputRoot = path.join(fixtureRoot, 'format/input')
+const formatOutputRoot = path.join(fixtureRoot, 'format/output')
+const lintInputRoot = path.join(fixtureRoot, 'lint')
+const runtimePath = path.resolve('.temp/fixture-test')
+
+const supportedFormatFixtures = [
+  'angular-inline.component.ts',
+  'angular.component.html',
+  'angular.component.ts',
+  'css.css',
+  'html.html',
+  'javascript.js',
+  'jsx.jsx',
+  'markdown.md',
+  'svelte.svelte',
+  'toml.toml',
+  'tsconfig.json',
+  'tsx.tsx',
+  'typescript.ts',
+  'vue-ts.vue',
+  'vue.vue',
+] as const
+
+const customFormatFixtures = ['javascript.js', 'jsx.jsx', 'typescript.ts', 'vue-ts.vue'] as const
+const unsupportedFormatFixtures = ['astro.astro', 'svg.svg', 'xml.xml'] as const
 
 beforeAll(async () => {
-  await fs.rm('_fixtures', { recursive: true, force: true })
+  await fs.rm(runtimePath, { force: true, recursive: true })
+  await fs.mkdir(runtimePath, { recursive: true })
+  await Promise.all([
+    fs.writeFile(
+      path.join(runtimePath, 'oxfmt.config.mjs'),
+      "import { oxfmt } from '../../dist/oxfmt.mjs'\nexport default oxfmt({ svelte: true })\n",
+    ),
+    fs.writeFile(
+      path.join(runtimePath, 'oxfmt.custom.config.mjs'),
+      "import { oxfmt } from '../../dist/oxfmt.mjs'\nexport default oxfmt({ singleQuote: false, svelte: true, useTabs: true })\n",
+    ),
+    fs.writeFile(
+      path.join(runtimePath, 'oxlint.config.mjs'),
+      "import oxlint from '../../dist/index.mjs'\nexport default oxlint()\n",
+    ),
+    fs.writeFile(
+      path.join(runtimePath, 'oxlint.react.config.mjs'),
+      "import oxlint from '../../dist/index.mjs'\nexport default oxlint({ react: true })\n",
+    ),
+    fs.writeFile(
+      path.join(runtimePath, 'oxlint.typescript.config.mjs'),
+      "import oxlint from '../../dist/index.mjs'\nexport default oxlint({ jsPlugins: false, typescript: true })\n",
+    ),
+    fs.writeFile(
+      path.join(runtimePath, 'oxlint.angular.config.mjs'),
+      "import oxlint from '../../dist/index.mjs'\nexport default oxlint({ angular: true })\n",
+    ),
+    fs.writeFile(
+      path.join(runtimePath, 'oxlint.vue.config.mjs'),
+      "import oxlint from '../../dist/index.mjs'\nexport default oxlint({ vue: true })\n",
+    ),
+    fs.writeFile(
+      path.join(runtimePath, 'oxlint.a11y.config.mjs'),
+      "import oxlint from '../../dist/index.mjs'\nexport default oxlint({ jsxA11y: true, react: true })\n",
+    ),
+    fs.writeFile(
+      path.join(runtimePath, 'oxlint.a11y-disabled.config.mjs'),
+      "import oxlint from '../../dist/index.mjs'\nexport default oxlint({ jsxA11y: false, react: true })\n",
+    ),
+    fs.writeFile(
+      path.join(runtimePath, 'oxlint.a11y-override.config.mjs'),
+      "import oxlint from '../../dist/index.mjs'\nexport default oxlint({ jsxA11y: { rules: { 'jsx-a11y/anchor-is-valid': 'off' } }, react: true })\n",
+    ),
+  ])
 })
+
 afterAll(async () => {
-  await fs.rm('_fixtures', { recursive: true, force: true })
+  await fs.rm(runtimePath, { force: true, recursive: true })
 })
 
-runWithConfig('js', {
-  typescript: false,
-  vue: false,
-})
-runWithConfig('all', {
-  typescript: true,
-  vue: true,
-  svelte: true,
-  astro: true,
-})
-runWithConfig('no-style', {
-  typescript: true,
-  vue: true,
-  stylistic: false,
-})
-runWithConfig(
-  'tab-double-quotes',
-  {
-    typescript: true,
-    vue: true,
-    toml: true,
-    stylistic: {
-      indent: 'tab',
-      quotes: 'double',
-    },
-  },
-  {
-    rules: {
-      'style/no-mixed-spaces-and-tabs': 'off',
-    },
-  },
-)
+async function formatFixture(name: string, configName: string): Promise<string> {
+  const input = await fs.readFile(path.join(formatInputRoot, name), 'utf8')
+  const result = await execa(
+    'oxfmt',
+    ['--config', path.join(runtimePath, configName), '--stdin-filepath', path.join(runtimePath, name)],
+    { input, reject: false, stripFinalNewline: false },
+  )
 
-// https://github.com/antfu/eslint-config/issues/255
-runWithConfig(
-  'ts-override',
-  {
-    typescript: true,
-  },
-  {
-    rules: {
-      'ts/consistent-type-definitions': ['error', 'type'],
-    },
-  },
-)
-
-// https://github.com/antfu/eslint-config/issues/255
-runWithConfig(
-  'ts-strict',
-  {
-    typescript: {
-      tsconfigPath: './tsconfig.json',
-    },
-  },
-  {
-    rules: {
-      'ts/no-unsafe-return': ['off'],
-    },
-  },
-)
-
-// https://github.com/antfu/eslint-config/issues/618
-runWithConfig(
-  'ts-strict-with-react',
-  {
-    typescript: {
-      tsconfigPath: './tsconfig.json',
-    },
-    react: true,
-  },
-  {
-    rules: {
-      'ts/no-unsafe-return': ['off'],
-    },
-  },
-)
-
-runWithConfig(
-  'with-formatters',
-  {
-    typescript: true,
-    vue: true,
-    astro: true,
-    formatters: true,
-  },
-)
-
-runWithConfig(
-  'no-markdown-with-formatters',
-  {
-    jsx: false,
-    vue: false,
-    markdown: false,
-    formatters: {
-      markdown: true,
-    },
-  },
-)
-
-// https://github.com/antfu/eslint-config/issues/837
-runWithConfig(
-  'issue-837',
-  {
-    typescript: false,
-    vue: false,
-  },
-  {
-    rules: {
-      'no-irregular-whitespace': ['warn', { skipStrings: true, skipTemplates: true }],
-    },
-  },
-)
-
-function runWithConfig(name: string, configs: OptionsConfig, ...items: TypedFlatConfigItem[]) {
-  it.concurrent(name, async ({ expect }) => {
-    const from = resolve('fixtures/input')
-    const output = resolve('fixtures/output', name)
-    const target = resolve('_fixtures', name)
-
-    await fs.cp(from, target, {
-      recursive: true,
-      filter: (src) => {
-        return !src.includes('node_modules')
-      },
-    })
-    await fs.writeFile(join(target, 'eslint.config.js'), `
-// @eslint-disable
-import antfu from '@antfu/eslint-config'
-
-export default antfu(
-  ${JSON.stringify(configs)},
-  ...${JSON.stringify(items) ?? []},
-)
-  `)
-
-    await execa('npx', ['eslint', '.', '--fix'], {
-      cwd: target,
-      stdio: 'pipe',
-    })
-
-    const files = await glob('**/*', {
-      ignore: [
-        'node_modules',
-        'eslint.config.js',
-      ],
-      cwd: target,
-    })
-
-    await Promise.all(files.map(async (file) => {
-      const content = await fs.readFile(join(target, file), 'utf-8')
-      const source = await fs.readFile(join(from, file), 'utf-8')
-      const outputPath = join(output, file)
-      if (content === source) {
-        await fs.rm(outputPath, { force: true })
-        return
-      }
-      await expect.soft(content).toMatchFileSnapshot(join(output, file))
-    }))
-  }, timeout)
+  expect(result.exitCode, `${name}: ${result.stderr}`).toBe(0)
+  return result.stdout
 }
+
+async function lintFixture(
+  filePath: string,
+  configName: string,
+  extraArguments: string[] = [],
+): Promise<OxlintDiagnostic[]> {
+  const result = await execa(
+    'oxlint',
+    ['--format', 'json', '--config', path.join(runtimePath, configName), ...extraArguments, filePath],
+    { reject: false },
+  )
+  const report = JSON.parse(result.stdout) as OxlintReport
+  return report.diagnostics
+}
+
+function expectDiagnostic(diagnostics: OxlintDiagnostic[], code: string, severity: OxlintDiagnostic['severity']): void {
+  expect(diagnostics).toEqual(expect.arrayContaining([expect.objectContaining({ code, severity })]))
+}
+
+function a11yDiagnostics(diagnostics: OxlintDiagnostic[]): OxlintDiagnostic[] {
+  return diagnostics.filter(diagnostic => diagnostic.code.startsWith('jsx-a11y('))
+}
+
+describe('oxfmt fixture corpus', () => {
+  it.each(supportedFormatFixtures)('formats %s with the shared defaults', async name => {
+    const actual = await formatFixture(name, 'oxfmt.config.mjs')
+    const expected = await fs.readFile(path.join(formatOutputRoot, 'default', name), 'utf8')
+
+    expect(actual).toBe(expected)
+  })
+
+  it.each(customFormatFixtures)('formats %s with tabs and double quotes', async name => {
+    const actual = await formatFixture(name, 'oxfmt.custom.config.mjs')
+    const expected = await fs.readFile(path.join(formatOutputRoot, 'tabs-double-quotes', name), 'utf8')
+
+    expect(actual).toBe(expected)
+  })
+
+  it.each(unsupportedFormatFixtures)('reports %s as unsupported', async name => {
+    const input = await fs.readFile(path.join(formatInputRoot, name), 'utf8')
+    const result = await execa(
+      'oxfmt',
+      ['--config', path.join(runtimePath, 'oxfmt.config.mjs'), '--stdin-filepath', path.join(runtimePath, name)],
+      { input, reject: false },
+    )
+
+    expect(result.exitCode).toBe(1)
+    expect(result.stderr).toContain('Unsupported file type')
+  })
+})
+
+describe('oxlint JSX accessibility fixtures', () => {
+  it('reports invalid anchor targets when enabled', async () => {
+    const diagnostics = a11yDiagnostics(
+      await lintFixture(path.join(lintInputRoot, 'jsx-a11y/invalid.jsx'), 'oxlint.a11y.config.mjs'),
+    )
+
+    expectDiagnostic(diagnostics, 'jsx-a11y(anchor-is-valid)', 'error')
+  })
+
+  it('does not report accessibility diagnostics when disabled', async () => {
+    const diagnostics = a11yDiagnostics(
+      await lintFixture(path.join(lintInputRoot, 'jsx-a11y/invalid.jsx'), 'oxlint.a11y-disabled.config.mjs'),
+    )
+
+    expect(diagnostics).toEqual([])
+  })
+
+  it('respects an accessibility rule override', async () => {
+    const diagnostics = a11yDiagnostics(
+      await lintFixture(path.join(lintInputRoot, 'jsx-a11y/invalid.jsx'), 'oxlint.a11y-override.config.mjs'),
+    )
+
+    expect(diagnostics.map(diagnostic => diagnostic.code)).not.toContain('jsx-a11y(anchor-is-valid)')
+  })
+
+  it('accepts the valid accessibility sample', async () => {
+    const diagnostics = a11yDiagnostics(
+      await lintFixture(path.join(lintInputRoot, 'jsx-a11y/valid.jsx'), 'oxlint.a11y.config.mjs'),
+    )
+
+    expect(diagnostics).toEqual([])
+  })
+})
+
+describe('oxlint language fixtures', () => {
+  it('checks JavaScript with the default rules', async () => {
+    const diagnostics = await lintFixture(path.join(formatInputRoot, 'javascript.js'), 'oxlint.config.mjs')
+
+    expectDiagnostic(diagnostics, 'eslint(no-var)', 'error')
+  })
+
+  it('checks JSX with the React rules', async () => {
+    const diagnostics = await lintFixture(path.join(lintInputRoot, 'react/invalid.jsx'), 'oxlint.react.config.mjs')
+
+    expectDiagnostic(diagnostics, 'react(no-unknown-property)', 'error')
+  })
+
+  it('checks TypeScript with regular and type-aware rules', async () => {
+    const diagnostics = await lintFixture(path.join(formatInputRoot, 'typescript.ts'), 'oxlint.typescript.config.mjs', [
+      '--tsconfig',
+      path.join(formatInputRoot, 'tsconfig.json'),
+    ])
+
+    expectDiagnostic(diagnostics, 'typescript(no-explicit-any)', 'warning')
+  })
+
+  it('checks TSX with the React rules', async () => {
+    const diagnostics = await lintFixture(path.join(formatInputRoot, 'tsx.tsx'), 'oxlint.react.config.mjs')
+
+    expectDiagnostic(diagnostics, 'react(no-unknown-property)', 'error')
+  })
+
+  it('checks Angular with its external plugin', async () => {
+    const diagnostics = await lintFixture(
+      path.join(lintInputRoot, 'angular/invalid.component.ts'),
+      'oxlint.angular.config.mjs',
+    )
+
+    expectDiagnostic(diagnostics, 'angular(no-empty-lifecycle-method)', 'error')
+  })
+
+  it('checks Vue with its native rules', async () => {
+    const diagnostics = await lintFixture(path.join(formatInputRoot, 'vue.vue'), 'oxlint.vue.config.mjs')
+
+    expectDiagnostic(diagnostics, 'vue(prefer-import-from-vue)', 'error')
+  })
+})

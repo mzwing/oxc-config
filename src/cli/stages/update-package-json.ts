@@ -1,69 +1,62 @@
-import type { ExtraLibrariesOption, PromptResult } from '../types'
+import type { MigrationOptions, PackageJson } from '../types.js'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
-
 import process from 'node:process'
 import * as p from '@clack/prompts'
-
 import c from 'ansis'
+import { peerDependencies, version } from '../../../package.json'
 
-import { version } from '../../../package.json'
-import { dependenciesMap } from '../constants'
-import { versionsMap } from '../constants-generated'
+const dependencyVersions = {
+  '@mzwing/oxc-config': `^${version}`,
+  ...peerDependencies,
+}
 
-export async function updatePackageJson(result: PromptResult): Promise<void> {
-  const cwd = process.cwd()
+type DependencyName = keyof typeof dependencyVersions
 
-  const pathPackageJSON = path.join(cwd, 'package.json')
+const dependencyPackages = {
+  angular: ['@angular-eslint/eslint-plugin'],
+  base: ['@mzwing/oxc-config', 'oxfmt', 'oxlint'],
+  react: ['@eslint-react/eslint-plugin'],
+  solid: ['eslint-plugin-solid'],
+  svelte: ['svelte'],
+  typescript: ['oxlint-tsgolint'],
+  unocss: ['@unocss/eslint-plugin'],
+} as const satisfies Record<string, readonly DependencyName[]>
 
-  p.log.step(c.cyan`Bumping @antfu/eslint-config to v${version}`)
+export function getDependencyVersions(result: MigrationOptions): Record<string, string> {
+  const names = new Set<DependencyName>(dependencyPackages.base)
 
-  const pkgContent = await fsp.readFile(pathPackageJSON, 'utf-8')
-  const pkg: Record<string, any> = JSON.parse(pkgContent)
+  if (result.frameworks.includes('react')) dependencyPackages.react.forEach(name => names.add(name))
+  if (result.frameworks.includes('solid')) dependencyPackages.solid.forEach(name => names.add(name))
+  if (result.frameworks.includes('svelte')) dependencyPackages.svelte.forEach(name => names.add(name))
+  if (result.frameworks.includes('angular')) dependencyPackages.angular.forEach(name => names.add(name))
+  if (result.frameworks.includes('unocss')) dependencyPackages.unocss.forEach(name => names.add(name))
+  if (result.typescript) dependencyPackages.typescript.forEach(name => names.add(name))
 
-  pkg.devDependencies ??= {}
-  pkg.devDependencies['@antfu/eslint-config'] = `^${version}`
-  pkg.devDependencies.eslint ??= versionsMap.eslint
+  return Object.fromEntries([...names].sort().map(name => [name, dependencyVersions[name]]))
+}
 
-  const addedPackages: string[] = []
+export async function updatePackageJson(result: MigrationOptions): Promise<void> {
+  const packagePath = path.join(process.cwd(), 'package.json')
+  const pkg = JSON.parse(await fsp.readFile(packagePath, 'utf8')) as PackageJson
+  const dependencies = getDependencyVersions(result)
 
-  if (result.extra.length) {
-    result.extra.forEach((item: ExtraLibrariesOption) => {
-      switch (item) {
-        case 'formatter':
-          (<const>[
-            ...dependenciesMap.formatter,
-            ...(result.frameworks.includes('astro') ? dependenciesMap.formatterAstro : []),
-          ]).forEach((f) => {
-            if (!f)
-              return
-            pkg.devDependencies[f] = versionsMap[f as keyof typeof versionsMap]
-            addedPackages.push(f)
-          })
-          break
-        case 'unocss':
-          dependenciesMap.unocss.forEach((f) => {
-            pkg.devDependencies[f] = versionsMap[f as keyof typeof versionsMap]
-            addedPackages.push(f)
-          })
-          break
-      }
-    })
+  pkg.devDependencies = {
+    ...pkg.devDependencies,
+    ...dependencies,
+  }
+  pkg.scripts = {
+    ...pkg.scripts,
+    format: 'oxfmt --write .',
+    'format:check': 'oxfmt --check .',
+    lint: 'oxlint',
+    'lint:fix': 'oxlint --fix',
+  }
+  pkg['lint-staged'] = {
+    '*.{cjs,cjsx,cts,ctsx,js,jsx,mjs,mjsx,mts,mtsx,ts,tsx,vue}': ['oxfmt --write', 'oxlint --fix'],
+    '*.{css,graphql,gql,html,json,json5,jsonc,less,md,mdx,scss,svelte,toml,yaml,yml}': 'oxfmt --write',
   }
 
-  for (const framework of result.frameworks) {
-    const deps = dependenciesMap[framework]
-    if (deps) {
-      deps.forEach((f) => {
-        pkg.devDependencies[f] = versionsMap[f as keyof typeof versionsMap]
-        addedPackages.push(f)
-      })
-    }
-  }
-
-  if (addedPackages.length)
-    p.note(c.dim(addedPackages.join(', ')), 'Added packages')
-
-  await fsp.writeFile(pathPackageJSON, JSON.stringify(pkg, null, 2))
-  p.log.success(c.green`Changes wrote to package.json`)
+  await fsp.writeFile(packagePath, `${JSON.stringify(pkg, null, 2)}\n`)
+  p.log.success(c.green('Updated package.json scripts and development dependencies'))
 }

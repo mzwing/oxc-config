@@ -2,15 +2,10 @@ import { defineConfig } from 'tsdown'
 import { StaleGuardRecorder } from 'tsdown-stale-guard'
 
 export default defineConfig({
-  entry: [
-    'src/index.ts',
-    'src/cli.ts',
-  ],
+  entry: ['src/index.ts', 'src/cli.ts', 'src/oxlint.ts', 'src/oxfmt.ts'],
   dts: true,
   shims: true,
   format: ['esm'],
   exports: true,
-  plugins: [
-    StaleGuardRecorder(),
-  ],
+  plugins: [StaleGuardRecorder()],
 })

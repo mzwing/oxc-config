@@ -3,15 +3,12 @@
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "include": [
-    "**/*.ts"
-  ],
-  "exclude": [
-    "./fixtures/**/*.*",
-    "./_fixtures/**/*.*"
-  ]
+  "include": ["**/*.ts"],
+  "exclude": ["./fixtures/**/*.*"]
 }

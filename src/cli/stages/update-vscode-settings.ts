@@ -1,41 +1,42 @@
-import type { PromptResult } from '../types'
+import type { MigrationOptions } from '../types.js'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
-
 import process from 'node:process'
 import * as p from '@clack/prompts'
+import c from 'ansis'
+import { applyEdits, modify, parse } from 'jsonc-parser'
+import { vscodeCodeActions, vscodeSettings } from '../constants.js'
 
-import { green } from 'ansis'
+const formattingOptions = {
+  eol: '\n',
+  insertSpaces: true,
+  tabSize: 2,
+}
 
-import { vscodeSettingsString } from '../constants'
+export async function updateVscodeSettings(result: MigrationOptions): Promise<void> {
+  if (!result.updateVscodeSettings) return
 
-const LAST_LINE_PATTERN = /\s*\}$/
+  const directory = path.join(process.cwd(), '.vscode')
+  const settingsPath = path.join(directory, 'settings.json')
+  await fsp.mkdir(directory, { recursive: true })
 
-export async function updateVscodeSettings(result: PromptResult): Promise<void> {
-  const cwd = process.cwd()
+  let content = fs.existsSync(settingsPath) ? await fsp.readFile(settingsPath, 'utf8') : '{}\n'
+  const current = parse(content) as Record<string, unknown>
+  const existingActions =
+    typeof current['editor.codeActionsOnSave'] === 'object' && current['editor.codeActionsOnSave'] !== null
+      ? (current['editor.codeActionsOnSave'] as Record<string, unknown>)
+      : {}
 
-  if (!result.updateVscodeSettings)
-    return
+  const updates: [string[], unknown][] = [
+    ...Object.entries(vscodeSettings).map(([key, value]) => [[key], value] as [string[], unknown]),
+    [['editor.codeActionsOnSave'], { ...existingActions, ...vscodeCodeActions }],
+    [['editor.codeActionsOnSave', 'source.fixAll.eslint'], undefined],
+  ]
 
-  const dotVscodePath: string = path.join(cwd, '.vscode')
-  const settingsPath: string = path.join(dotVscodePath, 'settings.json')
+  for (const [jsonPath, value] of updates)
+    content = applyEdits(content, modify(content, jsonPath, value, { formattingOptions }))
 
-  if (!fs.existsSync(dotVscodePath))
-    await fsp.mkdir(dotVscodePath, { recursive: true })
-
-  if (!fs.existsSync(settingsPath)) {
-    await fsp.writeFile(settingsPath, `{${vscodeSettingsString}}\n`, 'utf-8')
-    p.log.success(green`Created .vscode/settings.json`)
-  }
-  else {
-    let settingsContent = await fsp.readFile(settingsPath, 'utf8')
-
-    settingsContent = settingsContent.trim().replace(LAST_LINE_PATTERN, '')
-    settingsContent += settingsContent.endsWith(',') || settingsContent.endsWith('{') ? '' : ','
-    settingsContent += `${vscodeSettingsString}}\n`
-
-    await fsp.writeFile(settingsPath, settingsContent, 'utf-8')
-    p.log.success(green`Updated .vscode/settings.json`)
-  }
+  await fsp.writeFile(settingsPath, content.endsWith('\n') ? content : `${content}\n`)
+  p.log.success(c.green('Updated .vscode/settings.json for the Oxc extension'))
 }

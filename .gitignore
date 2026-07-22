@@ -78,10 +78,21 @@ dist
 .idea
 
 *.lerna_backup
-_fixtures
 
 .temp
 .history
 
-src/typegen.d.ts
-.eslint-config-inspector
+.oxlint-config-inspector
+
+.DS_Store
+
+# Devenv
+.devenv*
+devenv.local.nix
+devenv.local.yaml
+
+# direnv
+.direnv
+
+# pre-commit
+.pre-commit-config.yaml

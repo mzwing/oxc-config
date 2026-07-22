@@ -1,16 +1,17 @@
-export interface PromItem<T> {
-  label: string
-  value: T
-  hint?: string
+export const frameworkNames = ['angular', 'astro', 'nextjs', 'react', 'solid', 'svelte', 'unocss', 'vue'] as const
+
+export type FrameworkOption = (typeof frameworkNames)[number]
+
+export interface MigrationOptions {
+  frameworks: FrameworkOption[]
+  typescript: boolean
+  updateVscodeSettings: boolean
 }
 
-export type FrameworkOption = 'vue' | 'react' | 'svelte' | 'astro' | 'solid' | 'slidev'
-
-export type ExtraLibrariesOption = 'formatter' | 'unocss'
-
-export interface PromptResult {
-  uncommittedConfirmed: boolean
-  frameworks: FrameworkOption[]
-  extra: ExtraLibrariesOption[]
-  updateVscodeSettings: unknown
+export interface PackageJson {
+  [key: string]: unknown
+  dependencies?: Record<string, string>
+  devDependencies?: Record<string, string>
+  peerDependencies?: Record<string, string>
+  scripts?: Record<string, string>
 }
