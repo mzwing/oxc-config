@@ -73,15 +73,15 @@ beforeAll(async () => {
     ),
     fs.writeFile(
       path.join(runtimePath, 'oxlint.a11y.config.mjs'),
-      "import oxlint from '../../dist/index.mjs'\nexport default oxlint({ jsxA11y: true, react: true })\n",
+      "import oxlint from '../../dist/index.mjs'\nexport default oxlint({ jsx: { a11y: true }, react: true })\n",
     ),
     fs.writeFile(
       path.join(runtimePath, 'oxlint.a11y-disabled.config.mjs'),
-      "import oxlint from '../../dist/index.mjs'\nexport default oxlint({ jsxA11y: false, react: true })\n",
+      "import oxlint from '../../dist/index.mjs'\nexport default oxlint({ jsx: { a11y: false }, react: true })\n",
     ),
     fs.writeFile(
       path.join(runtimePath, 'oxlint.a11y-override.config.mjs'),
-      "import oxlint from '../../dist/index.mjs'\nexport default oxlint({ jsxA11y: { rules: { 'jsx-a11y/anchor-is-valid': 'off' } }, react: true })\n",
+      "import oxlint from '../../dist/index.mjs'\nexport default oxlint({ jsx: { a11y: { overrides: { 'jsx-a11y/anchor-is-valid': 'off' } } }, react: true })\n",
     ),
   ])
 })
@@ -208,13 +208,13 @@ describe('oxlint language fixtures', () => {
       path.join(formatInputRoot, 'tsconfig.json'),
     ])
 
-    expectDiagnostic(diagnostics, 'typescript(no-explicit-any)', 'warning')
+    expectDiagnostic(diagnostics, 'eslint(no-var)', 'error')
   })
 
-  it('checks TSX with the React rules', async () => {
+  it('lets TypeScript handle React DOM properties in TSX', async () => {
     const diagnostics = await lintFixture(path.join(formatInputRoot, 'tsx.tsx'), 'oxlint.react.config.mjs')
 
-    expectDiagnostic(diagnostics, 'react(no-unknown-property)', 'error')
+    expect(diagnostics.map(diagnostic => diagnostic.code)).not.toContain('react(no-unknown-property)')
   })
 
   it('checks Angular with its external plugin', async () => {

@@ -78,16 +78,19 @@ describe('cli migration', () => {
     expect(result.exitCode).toBe(0)
     expect(lintConfig).toContain("import oxlint from '@mzwing/oxc-config'")
     expect(lintConfig).toContain('react: true')
-    expect(lintConfig).toContain('svelte: true')
+    expect(lintConfig).not.toContain('svelte: true')
     expect(lintConfig).toContain('typescript: true')
     expect(lintConfig).toContain('lint-output')
+    expect(lintConfig).toContain('ignores:')
     expect(formatConfig).toContain('format-output')
+    expect(formatConfig).toContain('ignores:')
+    expect(formatConfig).not.toContain('ignorePatterns')
     expect(formatConfig).toContain('svelte: true')
     expect(pkg.devDependencies?.['@eslint-react/eslint-plugin']).toBe('^5.9.2')
     expect(pkg.devDependencies?.['@mzwing/oxc-config']).toBe(`^${version}`)
     expect(pkg.devDependencies?.oxfmt).toBe('^0.59.0')
-    expect(pkg.devDependencies?.oxlint).toBe('^1.74.0')
-    expect(pkg.devDependencies?.['oxlint-tsgolint']).toBe('^0.25.0')
+    expect(pkg.devDependencies?.oxlint).toBe('^1.75.0')
+    expect(pkg.devDependencies?.['oxlint-tsgolint']).toBe('^7.0.2001')
     expect(pkg.devDependencies?.svelte).toBe('^5.0.0')
     expect(pkg.scripts).toMatchObject({
       format: 'oxfmt --write .',
@@ -111,7 +114,7 @@ describe('cli migration', () => {
     expect(lintConfig).toContain('nextjs: true')
     expect(lintConfig).toContain('react: true')
     expect(lintConfig).toContain('typescript: true')
-    expect(pkg.devDependencies?.['oxlint-tsgolint']).toBe('^0.25.0')
+    expect(pkg.devDependencies?.['oxlint-tsgolint']).toBe('^7.0.2001')
     expect(settings).toContain('// Keep this comment')
     expect(settings).toContain('"custom.action": true')
     expect(settings).toContain('"source.fixAll.oxc": "explicit"')
@@ -132,6 +135,17 @@ describe('cli migration', () => {
     expect(formatConfig).toContain('export default oxfmt()')
     await expect(fs.stat(path.join(fixturePath, '.eslintrc.yml'))).resolves.toBeDefined()
     await expect(fs.stat(path.join(fixturePath, '.prettierrc'))).resolves.toBeDefined()
+  })
+
+  it('reports Astro as a gap without generating a fake integration', async () => {
+    const result = await runCli(['--yes', '--framework', 'astro', '--no-install'])
+    const lintConfig = await fs.readFile(path.join(fixturePath, 'oxlint.config.ts'), 'utf8')
+    const formatConfig = await fs.readFile(path.join(fixturePath, 'oxfmt.config.ts'), 'utf8')
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toContain('Astro linting and formatting are not currently supported by Oxc')
+    expect(lintConfig).not.toContain('astro: true')
+    expect(formatConfig).not.toContain('astro: true')
   })
 
   it('refuses to overwrite an existing Oxc config', async () => {

@@ -9,6 +9,7 @@ import { peerDependencies, version } from '../../../package.json'
 const dependencyVersions = {
   '@mzwing/oxc-config': `^${version}`,
   ...peerDependencies,
+  'oxlint-tsgolint': '^7.0.2001',
 }
 
 type DependencyName = keyof typeof dependencyVersions

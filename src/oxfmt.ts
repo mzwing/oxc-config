@@ -1,5 +1,20 @@
+import type { Ignores } from './types.ts'
 import type { OxfmtConfig, SortImportsConfig } from 'oxfmt'
 import { GLOB_EXCLUDE } from './globs.ts'
+
+type KnownOxfmtConfig = {
+  [Key in keyof OxfmtConfig as string extends Key
+    ? never
+    : number extends Key
+      ? never
+      : symbol extends Key
+        ? never
+        : Key]: OxfmtConfig[Key]
+}
+
+export type OxfmtOptions = Omit<KnownOxfmtConfig, 'ignorePatterns'> & {
+  ignores?: Ignores
+}
 
 const defaultSortImports: SortImportsConfig = {
   groups: ['type', 'builtin', 'external', 'internal', ['parent', 'sibling', 'index'], 'side_effect', 'unknown'],
@@ -23,18 +38,24 @@ export const oxfmtDefaults = {
   useTabs: false,
 } satisfies OxfmtConfig
 
-export function oxfmt(options: OxfmtConfig = {}): OxfmtConfig {
+export function oxfmt(options: OxfmtOptions = {}): OxfmtConfig {
+  if ('ignorePatterns' in options) {
+    throw new TypeError('[@mzwing/oxc-config] Unsupported `ignorePatterns` option. Use `ignores` instead.')
+  }
+
+  const { ignores = [], ...nativeOptions } = options
+  const ignorePatterns = typeof ignores === 'function' ? ignores([...GLOB_EXCLUDE]) : [...GLOB_EXCLUDE, ...ignores]
   const sortImports =
-    options.sortImports === undefined || options.sortImports === true
+    nativeOptions.sortImports === undefined || nativeOptions.sortImports === true
       ? defaultSortImports
-      : typeof options.sortImports === 'object'
-        ? { ...defaultSortImports, ...options.sortImports }
+      : typeof nativeOptions.sortImports === 'object'
+        ? { ...defaultSortImports, ...nativeOptions.sortImports }
         : false
 
   return {
     ...oxfmtDefaults,
-    ...options,
-    ignorePatterns: [...GLOB_EXCLUDE, ...(options.ignorePatterns ?? [])],
+    ...nativeOptions,
+    ignorePatterns,
     sortImports,
   }
 }

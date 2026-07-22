@@ -1,5 +1,8 @@
 export const antfuRules = {
   'antfu/no-top-level-await': 'error',
+} as const
+
+export const antfuImportRules = {
   'antfu/no-import-dist': 'error',
   'antfu/no-import-node-modules-by-path': 'error',
 } as const
@@ -237,17 +240,14 @@ export const baseRules = {
   ],
   'vars-on-top': 'error',
   yoda: ['error', 'never'],
+} as const
+
+export const importRules = {
   'import/consistent-type-specifier-style': ['error', 'prefer-top-level'],
   'import/first': 'error',
   'import/no-duplicates': 'error',
   'import/no-mutable-exports': 'error',
   'import/no-named-default': 'error',
-  'import/newline-after-import': [
-    'error',
-    {
-      count: 1,
-    },
-  ],
 } as const
 
 export const commandRules = {
@@ -261,16 +261,30 @@ export const commentsRules = {
   'eslint-comments/no-unused-enable': 'error',
 } as const
 
-export const e18eRules = {
+export const e18eModernizationRules = {
+  'e18e/prefer-array-at': 'error',
   'e18e/prefer-array-fill': 'error',
   'e18e/prefer-includes': 'error',
+  'e18e/prefer-array-to-reversed': 'error',
+  'e18e/prefer-array-to-sorted': 'error',
+  'e18e/prefer-array-to-spliced': 'error',
   'e18e/prefer-nullish-coalescing': 'error',
   'e18e/prefer-object-has-own': 'error',
+  'e18e/prefer-spread-syntax': 'error',
   'e18e/prefer-url-canparse': 'error',
+} as const
+
+export const e18eModuleReplacementRules = {
+  'e18e/ban-dependencies': 'error',
+} as const
+
+export const e18ePerformanceRules = {
+  'e18e/prefer-array-from-map': 'error',
   'e18e/prefer-timer-args': 'error',
   'e18e/prefer-date-now': 'error',
   'e18e/prefer-regex-test': 'error',
   'e18e/prefer-array-some': 'error',
+  'e18e/prefer-static-regex': 'error',
   'e18e/prefer-string-fromcharcode': 'error',
 } as const
 
@@ -570,7 +584,6 @@ export const testRules = {
   'vitest/prefer-hooks-in-order': 'error',
   'vitest/prefer-lowercase-title': 'error',
   'no-unused-expressions': 'off',
-  'typescript/explicit-function-return-type': 'off',
 } as const
 
 export const typescriptRules = {
@@ -609,7 +622,6 @@ export const typescriptRules = {
       allowTernary: true,
     },
   ],
-  'no-unused-vars': 'off',
   'no-useless-constructor': 'off',
   'no-use-before-define': [
     'error',
@@ -664,6 +676,9 @@ export const typescriptRules = {
   ],
   'typescript/method-signature-style': ['error', 'property'],
   'typescript/no-import-type-side-effects': 'error',
+} as const
+
+export const typescriptLibraryRules = {
   'typescript/explicit-function-return-type': [
     'error',
     {

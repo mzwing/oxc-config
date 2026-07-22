@@ -93,7 +93,7 @@ export default oxlint({
 })
 ```
 
-If you need custom tsconfig path, you'll have to specify it in the CLI like `oxlint --tsconfig ./path/to/tsconfig.json`, since Oxlint 1.74 automatically discovers the project and does not accept a tsconfig path in its configuration schema.
+If you need custom tsconfig path, you'll have to specify it in the CLI like `oxlint --tsconfig ./path/to/tsconfig.json`, since Oxlint will automatically discover the project and does not accept a tsconfig path in its configuration schema.
 
 `ts/no-explicit-any: warn` is enabled by default.
 

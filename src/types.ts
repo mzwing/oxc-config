@@ -1,57 +1,94 @@
-import type { OxfmtConfig } from 'oxfmt'
-import type { DummyRuleMap, ExternalPluginEntry, OxlintConfig, OxlintOverride } from 'oxlint'
+import type { DummyRuleMap, ExternalPluginEntry, OxlintConfig } from 'oxlint'
 
-export interface FeatureOptions {
-  files?: string[]
-  rules?: DummyRuleMap
+export type Rules = DummyRuleMap
+
+export type Ignores = string[] | ((originals: string[]) => string[])
+
+export interface OptionsOverrides {
+  overrides?: Rules
 }
 
-export interface JsFeatureOptions extends FeatureOptions {
+interface FlatGitignoreOptions {
+  cwd?: string
+  files?: string | string[]
+  filesGitModules?: string | string[]
+  recursive?: boolean | { skipDirs: string[] }
+  root?: boolean
+  strict?: boolean
+}
+
+interface OptionsNode {
   jsPlugin?: boolean
 }
 
-export type Feature = boolean | FeatureOptions
-export type JsFeature = boolean | JsFeatureOptions
+interface OptionsJSDoc {
+  jsPlugin?: boolean
+}
 
-export interface UnoCssOptions extends FeatureOptions {
+export interface OptionsTypescript extends OptionsOverrides {
+  erasableOnly?: boolean
+  filesTypeAware?: string[]
+  ignoresTypeAware?: string[]
+  overridesTypeAware?: Rules
+}
+
+export interface OptionsJSXA11y extends OptionsOverrides {}
+
+export interface OptionsJSX {
+  a11y?: boolean | OptionsJSXA11y
+}
+
+export interface OptionsE18e extends OptionsOverrides {
+  modernization?: boolean
+  moduleReplacements?: boolean
+  performanceImprovements?: boolean
+}
+
+export interface OptionsUnicorn extends OptionsOverrides {
+  allRecommended?: boolean
+}
+
+export interface OptionsReact extends OptionsOverrides {
+  jsPlugin?: boolean
+}
+
+export interface OptionsRegExp extends OptionsOverrides {
+  level?: 'error' | 'warn'
+}
+
+export interface OptionsUnoCSS extends OptionsOverrides {
   attributify?: boolean
   strict?: boolean
 }
 
-export interface OxlintOptions extends Omit<
-  OxlintConfig,
-  'categories' | 'env' | 'extends' | 'globals' | 'ignorePatterns' | 'jsPlugins' | 'options' | 'overrides' | 'rules'
-> {
+export interface OptionsConfig {
   additionalJsPlugins?: ExternalPluginEntry[]
-  angular?: Feature
-  antfu?: boolean
-  astro?: boolean
-  categories?: OxlintConfig['categories']
-  command?: boolean
-  comments?: boolean
-  e18e?: boolean
-  env?: OxlintConfig['env']
-  extends?: OxlintConfig[]
-  globals?: OxlintConfig['globals']
-  ignorePatterns?: string[]
-  imports?: boolean
+  angular?: boolean | OptionsOverrides
+  autoRenamePlugins?: boolean
+  e18e?: boolean | OptionsE18e
+  gitignore?: boolean | FlatGitignoreOptions
+  ignores?: Ignores
+  imports?: boolean | OptionsOverrides
+  isInEditor?: boolean
+  javascript?: OptionsOverrides
   jsPlugins?: boolean
-  jsdoc?: JsFeature
-  jsxA11y?: Feature
-  nextjs?: Feature
-  node?: JsFeature
-  options?: Omit<NonNullable<OxlintConfig['options']>, 'typeAware'>
-  overrides?: OxlintOverride[]
-  react?: JsFeature
-  regexp?: boolean
-  rules?: DummyRuleMap
-  solid?: Feature
-  svelte?: boolean
-  test?: Feature
-  typescript?: Feature
-  unicorn?: Feature
-  unocss?: boolean | UnoCssOptions
-  vue?: Feature
+  jsdoc?: boolean | OptionsJSDoc
+  jsx?: boolean | OptionsJSX
+  lessOpinionated?: boolean
+  nextjs?: boolean | OptionsOverrides
+  node?: boolean | OptionsNode
+  plugins?: OxlintConfig['plugins']
+  react?: boolean | OptionsReact
+  regexp?: boolean | OptionsRegExp
+  rules?: Rules
+  settings?: OxlintConfig['settings']
+  solid?: boolean | OptionsOverrides
+  test?: boolean | OptionsOverrides
+  type?: 'app' | 'lib'
+  typescript?: boolean | OptionsTypescript
+  unicorn?: boolean | OptionsUnicorn
+  unocss?: boolean | OptionsUnoCSS
+  vue?: boolean | OptionsOverrides
 }
 
-export type { DummyRuleMap, ExternalPluginEntry, OxlintConfig, OxlintOverride, OxfmtConfig }
+export type { ExternalPluginEntry } from 'oxlint'
