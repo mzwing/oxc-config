@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { execa } from 'execa'
+import { x } from 'tinyexec'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 interface OxlintDiagnostic {
@@ -92,10 +92,10 @@ afterAll(async () => {
 
 async function formatFixture(name: string, configName: string): Promise<string> {
   const input = await fs.readFile(path.join(formatInputRoot, name), 'utf8')
-  const result = await execa(
+  const result = await x(
     'oxfmt',
     ['--config', path.join(runtimePath, configName), '--stdin-filepath', path.join(runtimePath, name)],
-    { input, reject: false, stripFinalNewline: false },
+    { stdin: input },
   )
 
   expect(result.exitCode, `${name}: ${result.stderr}`).toBe(0)
@@ -107,11 +107,14 @@ async function lintFixture(
   configName: string,
   extraArguments: string[] = [],
 ): Promise<OxlintDiagnostic[]> {
-  const result = await execa(
-    'oxlint',
-    ['--format', 'json', '--config', path.join(runtimePath, configName), ...extraArguments, filePath],
-    { reject: false },
-  )
+  const result = await x('oxlint', [
+    '--format',
+    'json',
+    '--config',
+    path.join(runtimePath, configName),
+    ...extraArguments,
+    filePath,
+  ])
   const report = JSON.parse(result.stdout) as OxlintReport
   return report.diagnostics
 }
@@ -141,10 +144,10 @@ describe('oxfmt fixture corpus', () => {
 
   it.each(unsupportedFormatFixtures)('reports %s as unsupported', async name => {
     const input = await fs.readFile(path.join(formatInputRoot, name), 'utf8')
-    const result = await execa(
+    const result = await x(
       'oxfmt',
       ['--config', path.join(runtimePath, 'oxfmt.config.mjs'), '--stdin-filepath', path.join(runtimePath, name)],
-      { input, reject: false },
+      { stdin: input },
     )
 
     expect(result.exitCode).toBe(1)

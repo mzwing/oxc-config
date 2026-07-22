@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import { execa } from 'execa'
+import { x } from 'tinyexec'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { hasUncommittedChanges } from '../src/cli/utils.js'
 
@@ -31,13 +31,14 @@ async function writeFixture(pkg: Record<string, unknown> = {}): Promise<void> {
 }
 
 async function runCli(args: string[] = []) {
-  return execa('node', [cliPath, ...args], {
-    cwd: fixturePath,
-    env: {
-      ...process.env,
-      NO_COLOR: '1',
+  return x('node', [cliPath, ...args], {
+    nodeOptions: {
+      cwd: fixturePath,
+      env: {
+        ...process.env,
+        NO_COLOR: '1',
+      },
     },
-    reject: false,
   })
 }
 

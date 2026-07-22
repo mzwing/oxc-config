@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { execa } from 'execa'
+import { x } from 'tinyexec'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 const fixturePath = path.resolve('.temp/integration-test')
@@ -41,9 +41,7 @@ describe('published-tool integration', () => {
     const file = path.join(fixturePath, 'unused.ts')
     await fs.writeFile(file, "import { readFile } from 'node:fs/promises'\n\nexport const answer = 42\n")
 
-    const result = await execa('oxlint', ['--config', path.join(fixturePath, 'oxlint.config.mjs'), '--fix', file], {
-      reject: false,
-    })
+    const result = await x('oxlint', ['--config', path.join(fixturePath, 'oxlint.config.mjs'), '--fix', file])
     const output = await fs.readFile(file, 'utf8')
 
     expect(result.exitCode).toBe(0)
@@ -57,9 +55,7 @@ describe('published-tool integration', () => {
       '/**\n * Greet someone.\n * @param {string} wrong - The name.\n */\nexport function greet(name) { return new Buffer(name).toString() }\n',
     )
 
-    const result = await execa('oxlint', ['--config', path.join(fixturePath, 'oxlint.config.mjs'), file], {
-      reject: false,
-    })
+    const result = await x('oxlint', ['--config', path.join(fixturePath, 'oxlint.config.mjs'), file])
     const output = `${result.stdout}\n${result.stderr}`
 
     expect(result.exitCode).toBe(1)
@@ -75,11 +71,12 @@ describe('published-tool integration', () => {
       fs.writeFile(tsxFile, 'export const View = () => <div />\n'),
     ])
 
-    const result = await execa(
-      'oxlint',
-      ['--config', path.join(fixturePath, 'oxlint.frameworks.config.mjs'), tsFile, tsxFile],
-      { reject: false },
-    )
+    const result = await x('oxlint', [
+      '--config',
+      path.join(fixturePath, 'oxlint.frameworks.config.mjs'),
+      tsFile,
+      tsxFile,
+    ])
 
     expect(result.exitCode, `stdout:\n${result.stdout}\n\nstderr:\n${result.stderr}`).toBe(0)
   })
@@ -91,17 +88,13 @@ describe('published-tool integration', () => {
       'async function work() { return 1 }\nexport const View = () => <button type="button">Run</button>\nwork()\n',
     )
 
-    const result = await execa(
-      'oxlint',
-      [
-        '--config',
-        path.join(fixturePath, 'oxlint.typed-react.config.mjs'),
-        '--tsconfig',
-        path.join(fixturePath, 'tsconfig.json'),
-        file,
-      ],
-      { reject: false },
-    )
+    const result = await x('oxlint', [
+      '--config',
+      path.join(fixturePath, 'oxlint.typed-react.config.mjs'),
+      '--tsconfig',
+      path.join(fixturePath, 'tsconfig.json'),
+      file,
+    ])
 
     expect(result.exitCode, `stdout:\n${result.stdout}\n\nstderr:\n${result.stderr}`).toBe(1)
     expect(`${result.stdout}\n${result.stderr}`).toContain('typescript(no-floating-promises)')
