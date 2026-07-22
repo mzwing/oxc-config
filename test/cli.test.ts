@@ -4,6 +4,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { x } from 'tinyexec'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
+import { version } from '../package.json'
 import { hasUncommittedChanges } from '../src/cli/utils.js'
 
 const cliPath = path.resolve('bin/index.mjs')
@@ -83,7 +84,7 @@ describe('cli migration', () => {
     expect(formatConfig).toContain('format-output')
     expect(formatConfig).toContain('svelte: true')
     expect(pkg.devDependencies?.['@eslint-react/eslint-plugin']).toBe('^5.9.2')
-    expect(pkg.devDependencies?.['@mzwing/oxc-config']).toBe('^0.1.0')
+    expect(pkg.devDependencies?.['@mzwing/oxc-config']).toBe(`^${version}`)
     expect(pkg.devDependencies?.oxfmt).toBe('^0.59.0')
     expect(pkg.devDependencies?.oxlint).toBe('^1.74.0')
     expect(pkg.devDependencies?.['oxlint-tsgolint']).toBe('^0.25.0')
