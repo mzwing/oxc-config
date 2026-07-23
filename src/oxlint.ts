@@ -13,6 +13,7 @@ import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 import { GLOB_JSX, GLOB_SRC, GLOB_TESTS, GLOB_TS, GLOB_TSX, GLOB_VUE } from './globs.ts'
 import { resolveIgnorePatterns } from './ignores.ts'
 import {
@@ -243,8 +244,45 @@ function addOverride(
   })
 }
 
-function resolvePlugin(name: string, packageName: string): ExternalPluginEntry {
-  return { name, specifier: import.meta.resolve(packageName) }
+const jsPluginSpecifiers = {
+  angular: fileURLToPath(new URL('./js-plugins/angular.mjs', import.meta.url)),
+  antfu: fileURLToPath(new URL('./js-plugins/antfu.mjs', import.meta.url)),
+  command: fileURLToPath(new URL('./js-plugins/command.mjs', import.meta.url)),
+  e18e: fileURLToPath(new URL('./js-plugins/e18e.mjs', import.meta.url)),
+  'erasable-syntax-only': fileURLToPath(new URL('./js-plugins/erasable-syntax-only.mjs', import.meta.url)),
+  'eslint-comments': fileURLToPath(new URL('./js-plugins/eslint-comments.mjs', import.meta.url)),
+  'jsdoc-extra': fileURLToPath(new URL('./js-plugins/jsdoc-extra.mjs', import.meta.url)),
+  'node-extra': fileURLToPath(new URL('./js-plugins/node-extra.mjs', import.meta.url)),
+  'react-x': fileURLToPath(new URL('./js-plugins/react-x.mjs', import.meta.url)),
+  regexp: fileURLToPath(new URL('./js-plugins/regexp.mjs', import.meta.url)),
+  solid: fileURLToPath(new URL('./js-plugins/solid.mjs', import.meta.url)),
+  'unicorn-js': fileURLToPath(new URL('./js-plugins/unicorn-js.mjs', import.meta.url)),
+  unocss: fileURLToPath(new URL('./js-plugins/unocss.mjs', import.meta.url)),
+} as const
+
+const jsPluginPackages: Record<keyof typeof jsPluginSpecifiers, string> = {
+  angular: '@angular-eslint/eslint-plugin',
+  antfu: 'eslint-plugin-antfu',
+  command: 'eslint-plugin-command',
+  e18e: '@e18e/eslint-plugin',
+  'erasable-syntax-only': 'eslint-plugin-erasable-syntax-only',
+  'eslint-comments': '@eslint-community/eslint-plugin-eslint-comments',
+  'jsdoc-extra': 'eslint-plugin-jsdoc',
+  'node-extra': 'eslint-plugin-n',
+  'react-x': '@eslint-react/eslint-plugin',
+  regexp: 'eslint-plugin-regexp',
+  solid: 'eslint-plugin-solid',
+  'unicorn-js': 'eslint-plugin-unicorn',
+  unocss: '@unocss/eslint-plugin',
+}
+
+const isTypeScriptSource = path.extname(fileURLToPath(import.meta.url)) === '.ts'
+
+function resolvePlugin(name: keyof typeof jsPluginSpecifiers): ExternalPluginEntry {
+  return {
+    name,
+    specifier: isTypeScriptSource ? import.meta.resolve(jsPluginPackages[name]) : jsPluginSpecifiers[name],
+  }
 }
 
 function loadUnicornRecommendedRules(): ReadonlyRuleMap {
@@ -490,7 +528,7 @@ export function oxlint(options: OptionsConfig = {}): OxlintConfig {
       renameRules,
     )
     if (useNodeExtra) {
-      jsPlugins.push(resolvePlugin('node-extra', 'eslint-plugin-n'))
+      jsPlugins.push(resolvePlugin('node-extra'))
     }
   }
 
@@ -505,7 +543,7 @@ export function oxlint(options: OptionsConfig = {}): OxlintConfig {
       renameRules,
     )
     if (useJsdocExtra) {
-      jsPlugins.push(resolvePlugin('jsdoc-extra', 'eslint-plugin-jsdoc'))
+      jsPlugins.push(resolvePlugin('jsdoc-extra'))
     }
   }
 
@@ -513,7 +551,7 @@ export function oxlint(options: OptionsConfig = {}): OxlintConfig {
     if (useUnicornJs) {
       if (options.jsPlugins === false)
         throw new Error('[@mzwing/oxc-config] `unicorn.allRecommended` requires JS plugins.')
-      jsPlugins.push(resolvePlugin('unicorn-js', 'eslint-plugin-unicorn'))
+      jsPlugins.push(resolvePlugin('unicorn-js'))
       const userRules = normalizeRules(unicorn.overrides, renameRules)
       addOverride(
         overrides,
@@ -553,10 +591,7 @@ export function oxlint(options: OptionsConfig = {}): OxlintConfig {
     if (typescript.erasableOnly) {
       if (options.jsPlugins === false)
         throw new Error('[@mzwing/oxc-config] `typescript.erasableOnly` requires JS plugins.')
-      jsPlugins.push({
-        name: 'erasable-syntax-only',
-        specifier: import.meta.resolve('eslint-plugin-erasable-syntax-only'),
-      })
+      jsPlugins.push(resolvePlugin('erasable-syntax-only'))
       addOverride(overrides, [GLOB_TS, GLOB_TSX], erasableSyntaxOnlyRules, undefined, false)
     }
   }
@@ -612,7 +647,7 @@ export function oxlint(options: OptionsConfig = {}): OxlintConfig {
       react.overrides,
       renameRules,
     )
-    if (useReactX) jsPlugins.push(resolvePlugin('react-x', '@eslint-react/eslint-plugin'))
+    if (useReactX) jsPlugins.push(resolvePlugin('react-x'))
     if (typescript !== false) {
       addOverride(
         overrides,
@@ -634,7 +669,7 @@ export function oxlint(options: OptionsConfig = {}): OxlintConfig {
 
   if (solid !== false) {
     if (options.jsPlugins === false) throw new Error('[@mzwing/oxc-config] The Solid integration requires JS plugins.')
-    jsPlugins.push(resolvePlugin('solid', 'eslint-plugin-solid'))
+    jsPlugins.push(resolvePlugin('solid'))
     addOverride(
       overrides,
       [GLOB_JSX, GLOB_TSX],
@@ -650,13 +685,13 @@ export function oxlint(options: OptionsConfig = {}): OxlintConfig {
   if (angular !== false) {
     if (options.jsPlugins === false)
       throw new Error('[@mzwing/oxc-config] The Angular integration requires JS plugins.')
-    jsPlugins.push(resolvePlugin('angular', '@angular-eslint/eslint-plugin'))
+    jsPlugins.push(resolvePlugin('angular'))
     addOverride(overrides, [GLOB_TS], angularRules, angular.overrides, renameRules)
   }
 
   if (unocss !== false) {
     if (options.jsPlugins === false) throw new Error('[@mzwing/oxc-config] The UnoCSS integration requires JS plugins.')
-    jsPlugins.push(resolvePlugin('unocss', '@unocss/eslint-plugin'))
+    jsPlugins.push(resolvePlugin('unocss'))
     addOverride(
       overrides,
       [GLOB_SRC],
@@ -671,20 +706,20 @@ export function oxlint(options: OptionsConfig = {}): OxlintConfig {
   }
 
   if (options.jsPlugins !== false) {
-    jsPlugins.push(resolvePlugin('antfu', 'eslint-plugin-antfu'))
+    jsPlugins.push(resolvePlugin('antfu'))
     Object.assign(rootRules, antfuRules)
     if (!options.lessOpinionated) {
       rootRules['antfu/curly'] = 'error'
       rootRules['antfu/top-level-function'] = 'error'
     }
 
-    jsPlugins.push(resolvePlugin('eslint-comments', '@eslint-community/eslint-plugin-eslint-comments'))
+    jsPlugins.push(resolvePlugin('eslint-comments'))
     Object.assign(rootRules, commentsRules)
-    jsPlugins.push(resolvePlugin('command', 'eslint-plugin-command'))
+    jsPlugins.push(resolvePlugin('command'))
     Object.assign(rootRules, commandRules)
 
     if (e18e !== false) {
-      jsPlugins.push(resolvePlugin('e18e', '@e18e/eslint-plugin'))
+      jsPlugins.push(resolvePlugin('e18e'))
       Object.assign(
         rootRules,
         buildE18eRules(e18e, projectType, isInEditor),
@@ -692,7 +727,7 @@ export function oxlint(options: OptionsConfig = {}): OxlintConfig {
       )
     }
     if (regexp !== false) {
-      jsPlugins.push(resolvePlugin('regexp', 'eslint-plugin-regexp'))
+      jsPlugins.push(resolvePlugin('regexp'))
       Object.assign(rootRules, buildRegexpRules(regexp), normalizeRules(regexp.overrides, renameRules))
     }
   }

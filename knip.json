@@ -1,10 +1,4 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignoreDependencies": [
-    "@angular-eslint/eslint-plugin",
-    "@eslint-react/eslint-plugin",
-    "@unocss/eslint-plugin",
-    "eslint-plugin-solid"
-  ],
   "ignoreFiles": ["fixtures/**"]
 }
